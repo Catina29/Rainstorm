@@ -1,5 +1,4 @@
-
-html_code = '''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -48,6 +47,16 @@ body {
   z-index: 9997;
   transition: box-shadow 0.8s ease;
 }
+.pressure-scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(220,38,38,0.03) 2px, rgba(220,38,38,0.03) 4px);
+  pointer-events: none;
+  z-index: 9996;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.pressure-scanlines.active { opacity: 1; }
 .emergency-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -249,6 +258,7 @@ h1 {
 .badge-urgent { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
 .badge-soon { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
 .badge-done { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+.badge-wait { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
 .task-meta {
   font-size: 12px;
   color: var(--text-dim);
@@ -417,7 +427,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .alert-box.active { display: flex; }
 
-/* 日志样式 */
+/* 日志 */
 .log-list { display: flex; flex-direction: column; gap: 14px; }
 .log-item {
   background: var(--card); border: 1px solid var(--card-border);
@@ -436,9 +446,7 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 12px; color: var(--text-dim);
 }
 .log-stat { background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 8px; }
-.log-delete {
-  font-size: 12px; color: #ef4444; cursor: pointer; opacity: 0.6;
-}
+.log-delete { font-size: 12px; color: #ef4444; cursor: pointer; opacity: 0.6; }
 .log-delete:hover { opacity: 1; }
 
 /* 图表 */
@@ -454,19 +462,15 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .chart-legend-item { display: flex; align-items: center; gap: 6px; }
 .chart-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
-.chart-tabs {
-  display: flex; gap: 8px; margin-bottom: 16px;
-}
+.chart-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
 .chart-tab {
   padding: 6px 14px; border-radius: 10px; border: 1px solid var(--card-border);
   background: rgba(255,255,255,0.03); color: var(--text-dim);
   font-size: 13px; cursor: pointer; transition: all 0.2s;
 }
-.chart-tab.active {
-  background: var(--accent); color: white; border-color: transparent;
-}
+.chart-tab.active { background: var(--accent); color: white; border-color: transparent; }
 
-/* 底部固定导航 */
+/* 底部导航 */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
   background: linear-gradient(180deg, rgba(11,15,25,0.9) 0%, #0b0f19 100%);
@@ -483,6 +487,49 @@ input[type="range"]::-webkit-slider-thumb {
 .nav-item.active { color: var(--accent); }
 .nav-item svg { width: 24px; height: 24px; }
 
+/* 高压特效 */
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-1px, 1px); }
+  20% { transform: translate(1px, -1px); }
+  30% { transform: translate(-1px, -1px); }
+  40% { transform: translate(1px, 1px); }
+  50% { transform: translate(-1px, 0); }
+  60% { transform: translate(1px, 0); }
+  70% { transform: translate(0, 1px); }
+  80% { transform: translate(0, -1px); }
+  90% { transform: translate(-1px, 1px); }
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+@keyframes border-flash {
+  0%, 100% { border-color: rgba(220, 38, 38, 0.3); }
+  50% { border-color: rgba(220, 38, 38, 1); }
+}
+@keyframes glitch-text {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; transform: translateX(0); }
+  93% { opacity: 0.8; transform: translateX(2px); }
+  94% { opacity: 1; transform: translateX(0); }
+  96% { opacity: 0.6; }
+  97% { opacity: 1; }
+}
+body.extreme-pressure {
+  animation: screen-shake 0.3s infinite;
+}
+body.extreme-pressure .container {
+  animation: heartbeat 0.8s infinite;
+}
+body.extreme-pressure .task-card {
+  animation: border-flash 0.5s infinite;
+}
+body.extreme-pressure h1,
+body.extreme-pressure .gauge-status {
+  animation: glitch-text 2s infinite;
+}
+
 @media (min-width: 640px) {
   .modal { align-items: center; }
   .modal-content { border-radius: 24px; max-height: 85vh; }
@@ -494,10 +541,12 @@ input[type="range"]::-webkit-slider-thumb {
   .gauge-circle { width: 52px; height: 52px; }
 }
 </style>
+<base target="_blank">
 </head>
 <body>
 <div class="pressure-overlay"></div>
 <div class="pressure-vignette"></div>
+<div class="pressure-scanlines" id="scanlines"></div>
 <div class="emergency-banner" id="emergencyBanner">系统警告：任务严重滞后！立即行动！</div>
 
 <div class="container">
@@ -526,7 +575,6 @@ input[type="range"]::-webkit-slider-thumb {
 
 <button class="fab" id="fabBtn" onclick="handleFab()">+</button>
 
-<!-- 底部导航 -->
 <div class="bottom-nav">
   <div class="nav-item active" onclick="switchView('tasks')" id="nav-tasks">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6 4h8a2 2 0 002-2v-8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
@@ -542,79 +590,42 @@ input[type="range"]::-webkit-slider-thumb {
   </div>
 </div>
 
-<!-- 添加任务模态框 -->
 <div class="modal" id="addModal">
   <div class="modal-backdrop" onclick="closeAddModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title">添加新任务</div>
-      <button class="modal-close" onclick="closeAddModal()">×</button>
-    </div>
-    <div class="form-group">
-      <label class="form-label">任务名称</label>
-      <input type="text" class="form-input" id="addTitle" placeholder="输入任务名称..." maxlength="100">
-    </div>
-    <div class="form-group">
-      <label class="form-label">开始时间</label>
-      <input type="datetime-local" class="form-input" id="addStart">
-    </div>
-    <div class="form-group">
-      <label class="form-label">截止时间</label>
-      <input type="datetime-local" class="form-input" id="addDeadline">
-    </div>
+    <div class="modal-header"><div class="modal-title">添加新任务</div><button class="modal-close" onclick="closeAddModal()">×</button></div>
+    <div class="form-group"><label class="form-label">任务名称</label><input type="text" class="form-input" id="addTitle" placeholder="输入任务名称..." maxlength="100"></div>
+    <div class="form-group"><label class="form-label">开始时间</label><input type="datetime-local" class="form-input" id="addStart"></div>
+    <div class="form-group"><label class="form-label">截止时间</label><input type="datetime-local" class="form-input" id="addDeadline"></div>
     <button class="btn btn-primary" style="width:100%;" onclick="submitAddTask()">添加任务</button>
   </div>
 </div>
 
-<!-- 编辑任务模态框 -->
 <div class="modal" id="editModal">
   <div class="modal-backdrop" onclick="closeEditModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title">编辑任务</div>
-      <button class="modal-close" onclick="closeEditModal()">×</button>
-    </div>
-    <div class="form-group">
-      <label class="form-label">任务名称</label>
-      <input type="text" class="form-input" id="editTitle" maxlength="100">
-    </div>
-    <div class="form-group">
-      <label class="form-label">开始时间</label>
-      <input type="datetime-local" class="form-input" id="editStart">
-    </div>
-    <div class="form-group">
-      <label class="form-label">截止时间</label>
-      <input type="datetime-local" class="form-input" id="editDeadline">
-    </div>
+    <div class="modal-header"><div class="modal-title">编辑任务</div><button class="modal-close" onclick="closeEditModal()">×</button></div>
+    <div class="form-group"><label class="form-label">任务名称</label><input type="text" class="form-input" id="editTitle" maxlength="100"></div>
+    <div class="form-group"><label class="form-label">开始时间</label><input type="datetime-local" class="form-input" id="editStart"></div>
+    <div class="form-group"><label class="form-label">截止时间</label><input type="datetime-local" class="form-input" id="editDeadline"></div>
     <button class="btn btn-primary" style="width:100%;" onclick="submitEditTask()">保存修改</button>
   </div>
 </div>
 
-<!-- 汇报模态框 -->
 <div class="modal" id="reportModal">
   <div class="modal-backdrop" onclick="closeReportModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title" id="reportTaskTitle">汇报任务</div>
-      <button class="modal-close" onclick="closeReportModal()">×</button>
-    </div>
+    <div class="modal-header"><div class="modal-title" id="reportTaskTitle">汇报任务</div><button class="modal-close" onclick="closeReportModal()">×</button></div>
     <div class="form-group">
-      <label class="form-label">今日进度增加（格数）</label>
-      <div class="range-row">
-        <input type="range" id="reportProgress" min="1" max="50" value="10" oninput="updateRangeValue(this.value)">
-        <div class="range-value" id="rangeValue">10</div>
-      </div>
-      <div class="form-hint">建议每次汇报10-20格，过少会触发压力警告</div>
+      <label class="form-label">本次进度增加（格数）</label>
+      <div class="range-row"><input type="range" id="reportProgress" min="1" max="50" value="5" oninput="updateRangeValue(this.value)"><div class="range-value" id="rangeValue">5</div></div>
+      <div class="form-hint">一天可多次汇报，累计推进，建议每次5-15格</div>
     </div>
-    <div class="form-group">
-      <label class="form-label">成果说明</label>
-      <textarea class="form-textarea" id="reportText" placeholder="详细描述今日完成的任务内容..."></textarea>
-    </div>
+    <div class="form-group"><label class="form-label">成果说明</label><textarea class="form-textarea" id="reportText" placeholder="描述本次完成的任务内容..."></textarea></div>
     <div class="form-group">
       <label class="form-label">照片证明（可选）</label>
       <div class="photo-upload" onclick="document.getElementById('reportPhoto').click()">
-        <div>📷 点击上传照片</div>
-        <div class="form-hint">支持 JPG/PNG，会自动压缩</div>
+        <div>📷 点击上传照片</div><div class="form-hint">支持 JPG/PNG，自动压缩</div>
         <input type="file" id="reportPhoto" accept="image/*" onchange="previewPhoto(this)">
         <img class="photo-preview" id="photoPreview">
       </div>
@@ -623,56 +634,36 @@ input[type="range"]::-webkit-slider-thumb {
   </div>
 </div>
 
-<!-- 历史记录模态框 -->
 <div class="modal" id="recordsModal">
   <div class="modal-backdrop" onclick="closeRecordsModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title" id="recordsTaskTitle">汇报记录</div>
-      <button class="modal-close" onclick="closeRecordsModal()">×</button>
-    </div>
+    <div class="modal-header"><div class="modal-title" id="recordsTaskTitle">汇报记录</div><button class="modal-close" onclick="closeRecordsModal()">×</button></div>
     <div id="recordsList" class="records-list"></div>
   </div>
 </div>
 
-<!-- 敷衍警告模态框 -->
 <div class="modal warning-modal" id="warningModal">
   <div class="modal-backdrop" onclick="closeWarningModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title">⚠️ 敷衍警告</div>
-      <button class="modal-close" onclick="closeWarningModal()">×</button>
-    </div>
-    <div class="warning-text">
-      系统检测到你在极度压力下仅增加了极少进度！<br>
-      这种敷衍的汇报无法缓解系统压力！
-    </div>
+    <div class="modal-header"><div class="modal-title">⚠️ 敷衍警告</div><button class="modal-close" onclick="closeWarningModal()">×</button></div>
+    <div class="warning-text">系统检测到你在极度压力下仅增加了极少进度！<br>这种敷衍的汇报无法缓解系统压力！</div>
     <div class="consequence-box">
       <div class="consequence-title">继续拖延的后果：</div>
       <ul class="consequence-list">
-        <li>页面将持续保持深红警告状态</li>
-        <li>所有任务卡片进入震动警报模式</li>
-        <li>系统将在后台记录你的懈怠行为</li>
-        <li>截止日期临近时惩罚将加倍</li>
+        <li>页面将持续保持深红警告状态</li><li>所有任务卡片进入震动警报模式</li>
+        <li>系统将在后台记录你的懈怠行为</li><li>截止日期临近时惩罚将加倍</li>
       </ul>
     </div>
     <button class="btn btn-danger" style="width:100%;" onclick="closeWarningModal()">我知道了，立即认真完成</button>
   </div>
 </div>
 
-<!-- 生成今日小结模态框 -->
 <div class="modal" id="summaryModal">
   <div class="modal-backdrop" onclick="closeSummaryModal()"></div>
   <div class="modal-content">
-    <div class="modal-header">
-      <div class="modal-title">📝 今日小结</div>
-      <button class="modal-close" onclick="closeSummaryModal()">×</button>
-    </div>
+    <div class="modal-header"><div class="modal-title">📝 今日小结</div><button class="modal-close" onclick="closeSummaryModal()">×</button></div>
     <div id="summaryContent" style="font-size:14px;line-height:1.8;color:var(--text);white-space:pre-wrap;margin-bottom:16px;"></div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn btn-ghost" style="flex:1;" onclick="closeSummaryModal()">取消</button>
-      <button class="btn btn-primary" style="flex:1;" onclick="confirmSaveSummary()">保存到日志</button>
-    </div>
+    <div style="display:flex;gap:10px;"><button class="btn btn-ghost" style="flex:1;" onclick="closeSummaryModal()">取消</button><button class="btn btn-primary" style="flex:1;" onclick="confirmSaveSummary()">保存到日志</button></div>
   </div>
 </div>
 
@@ -683,7 +674,7 @@ let currentReportTaskId = null;
 let currentEditTaskId = null;
 let currentView = 'tasks';
 let tempSummary = null;
-const STORAGE_KEY = 'pressureTaskManager_v3';
+const STORAGE_KEY = 'pressureTaskManager_v4';
 
 function getInitialTasks() {
   const now = new Date();
@@ -720,26 +711,16 @@ function init() {
     tasks = getInitialTasks();
     dailyLogs = [];
   }
-  if (!Array.isArray(tasks)) { tasks = getInitialTasks(); }
-  if (!Array.isArray(dailyLogs)) { dailyLogs = []; }
-  // 迁移旧数据：补充 startDate
-  tasks.forEach(t => {
-    if (!t.startDate) {
-      const dl = new Date(t.deadline);
-      dl.setDate(dl.getDate() - 7);
-      t.startDate = dl.toISOString();
-    }
-  });
+  if (!Array.isArray(tasks)) tasks = getInitialTasks();
+  if (!Array.isArray(dailyLogs)) dailyLogs = [];
+  tasks.forEach(t => { if (!t.startDate) t.startDate = t.createdAt || t.deadline; });
   render();
   updatePressure();
 }
 
 function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, dailyLogs }));
-  } catch(e) {
-    alert('保存失败，可能存储空间已满，请删除部分图片记录');
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, dailyLogs })); }
+  catch(e) { alert('保存失败，存储空间已满'); }
 }
 
 function getTodayStr() {
@@ -781,25 +762,55 @@ function getExpectedProgress(task) {
   return Math.min(100, Math.floor((elapsed / total) * 100));
 }
 
+function getUrgencyScore(task) {
+  const now = new Date();
+  const start = new Date(task.startDate);
+  const end = new Date(task.deadline);
+  if (now < start) return 0;
+  if (task.progress >= 100) return 0;
+  const remainingProgress = 100 - task.progress;
+  const remainingMs = end - now;
+  const remainingDays = Math.max(0.5, remainingMs / (1000*60*60*24));
+  if (remainingMs < 0) return 100 + Math.abs(remainingDays) * 10;
+  const dailyNeed = remainingProgress / remainingDays;
+  if (remainingDays > 7 && dailyNeed <= 3) return dailyNeed * 3;
+  if (remainingDays > 3 && dailyNeed <= 8) return 20 + dailyNeed * 4;
+  return 50 + dailyNeed * 6;
+}
+
 function calculatePressure() {
   let pressure = 0;
   const now = new Date();
   const todayStr = getTodayStr();
   if (tasks.length === 0) return 0;
   tasks.forEach(task => {
+    const start = new Date(task.startDate);
+    const end = new Date(task.deadline);
+    if (now < start) return;
     if (task.progress >= 100) return;
-    const dl = new Date(task.deadline);
-    const hasToday = task.reports.some(r => r.date === todayStr);
-    if (!hasToday) pressure += 12;
-    if (now > dl) {
-      const daysOver = Math.floor((now - dl) / (1000*60*60*24));
-      pressure += daysOver * 10;
+    const urgency = getUrgencyScore(task);
+    const hasTodayReport = task.reports.some(r => r.date === todayStr);
+    const hasAnyReport = task.reports.length > 0;
+    pressure += Math.min(40, urgency * 0.4);
+    if (!hasTodayReport) {
+      if (urgency > 50) pressure += 18;
+      else if (urgency > 20) pressure += 10;
+      else pressure += 4;
+    }
+    if (now > end) {
+      const daysOver = Math.floor((now - end) / (1000*60*60*24));
+      pressure += daysOver * 8;
     }
     const expected = getExpectedProgress(task);
-    if (task.progress < expected * 0.5) pressure += 8;
-    if (hasToday) {
-      const todayRep = task.reports.find(r => r.date === todayStr);
-      if (todayRep && todayRep.progressAdded < 5) pressure += 10;
+    if (task.progress < expected * 0.3) pressure += 12;
+    else if (task.progress < expected * 0.6) pressure += 6;
+    if (hasTodayReport && urgency > 60) {
+      const todayTotal = task.reports.filter(r => r.date === todayStr).reduce((s, r) => s + r.progressAdded, 0);
+      if (todayTotal < 5) pressure += 8;
+    }
+    if (!hasAnyReport) {
+      const daysSinceStart = Math.floor((now - start) / (1000*60*60*24));
+      if (daysSinceStart > 2) pressure += daysSinceStart * 3;
     }
   });
   return Math.min(100, Math.floor(pressure));
@@ -815,25 +826,47 @@ function updatePressure() {
   const emergencyBanner = document.getElementById('emergencyBanner');
   const consequenceAlert = document.getElementById('consequenceAlert');
   const consequenceText = document.getElementById('consequenceText');
+  const scanlines = document.getElementById('scanlines');
   gaugeValue.textContent = p;
   gaugeBarFill.style.width = p + '%';
   let status = '状态正常';
   if (p === 0) status = '状态完美';
-  else if (p < 30) status = '轻微压力';
-  else if (p < 50) status = '压力上升';
-  else if (p < 70) status = '压力警告';
+  else if (p < 20) status = '一切良好';
+  else if (p < 40) status = '压力渐升';
+  else if (p < 60) status = '需要关注';
+  else if (p < 75) status = '压力警告';
   else if (p < 90) status = '高压危险';
   else if (p < 100) status = '极度危险';
   else status = '系统崩溃边缘';
   gaugeStatus.textContent = status;
   gaugeStatus.style.color = p > 60 ? '#fca5a5' : (p > 30 ? '#fcd34d' : '#6ee7b7');
-  if (p >= 100) { emergencyBanner.classList.add('active'); document.body.classList.add('critical-mode'); }
-  else { emergencyBanner.classList.remove('active'); document.body.classList.remove('critical-mode'); }
-  const unreported = tasks.filter(t => t.progress < 100 && !t.reports.some(r => r.date === getTodayStr()));
-  if (p >= 80 && unreported.length > 0) {
+  if (p >= 100) {
+    emergencyBanner.classList.add('active');
+    document.body.classList.add('extreme-pressure');
+    scanlines.classList.add('active');
+  } else if (p >= 85) {
+    emergencyBanner.classList.add('active');
+    document.body.classList.remove('extreme-pressure');
+    scanlines.classList.add('active');
+  } else if (p >= 70) {
+    emergencyBanner.classList.remove('active');
+    document.body.classList.remove('extreme-pressure');
+    scanlines.classList.remove('active');
+  } else {
+    emergencyBanner.classList.remove('active');
+    document.body.classList.remove('extreme-pressure');
+    scanlines.classList.remove('active');
+  }
+  const todayStr = getTodayStr();
+  const activeTasks = tasks.filter(t => {
+    const start = new Date(t.startDate);
+    return new Date() >= start && t.progress < 100;
+  });
+  const unreported = activeTasks.filter(t => !t.reports.some(r => r.date === todayStr));
+  if (p >= 60 && unreported.length > 0) {
     consequenceAlert.classList.add('active');
     const names = unreported.slice(0,2).map(t => `「${t.title}」`).join('、');
-    consequenceText.textContent = `你还有 ${unreported.length} 项任务今日未汇报（${names}等），系统压力已达 ${p}%！`;
+    consequenceText.textContent = `${unreported.length} 项进行中任务今日未汇报（${names}等），压力 ${p}%`;
   } else { consequenceAlert.classList.remove('active'); }
 }
 
@@ -848,29 +881,48 @@ function render() {
 
 function renderTasks(container) {
   const todayStr = getTodayStr();
+  const now = new Date();
   if (tasks.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div>暂无任务，点击右下角添加</div></div>';
     return;
   }
   container.innerHTML = '<div class="tasks-list">' + tasks.map(task => {
+    const start = new Date(task.startDate);
+    const end = new Date(task.deadline);
     const status = getDeadlineStatus(task.deadline, task.progress);
-    const hasToday = task.reports.some(r => r.date === todayStr);
+    const hasStarted = now >= start;
     const isDone = task.progress >= 100;
-    const expected = getExpectedProgress(task);
-    let btnClass = 'btn-primary'; let btnText = '今日汇报';
-    if (isDone) { btnClass = 'btn-success'; btnText = '已完成'; }
-    else if (hasToday) { btnClass = 'btn-success'; btnText = '今日已汇报 ✓'; }
+    const urgency = getUrgencyScore(task);
+    const todayReports = task.reports.filter(r => r.date === todayStr);
+    const hasTodayReport = todayReports.length > 0;
+    const todayTotal = todayReports.reduce((s, r) => s + r.progressAdded, 0);
+    let btnClass = 'btn-primary'; let btnText = '推进进度';
+    if (!hasStarted) { btnClass = 'btn-ghost'; btnText = '尚未开始'; }
+    else if (isDone) { btnClass = 'btn-success'; btnText = '已完成'; }
+    else if (hasTodayReport) { btnClass = 'btn-success'; btnText = `今日+${todayTotal}格 ✓`; }
     else if (status.overdue) { btnClass = 'btn-danger'; btnText = '立即汇报！'; }
-    const unreportedWarn = (!isDone && !hasToday) ? `<div style="color:#ef4444;font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:4px;">🔴 今日未汇报！压力持续上升中...</div>` : '';
-    const expectedMarker = !isDone ? `<div class="expected-marker" style="left:${expected}%;"></div>` : '';
+    let warnHtml = '';
+    if (hasStarted && !isDone && !hasTodayReport) {
+      if (urgency > 60) warnHtml = `<div style="color:#ef4444;font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:4px;">🔴 今日未汇报！时间紧迫，请立即推进！</div>`;
+      else if (urgency > 30) warnHtml = `<div style="color:#f59e0b;font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:4px;">⚠️ 今日未汇报，进度需要追赶</div>`;
+      else warnHtml = `<div style="color:#94a3b8;font-size:12px;margin-bottom:8px;">💡 今日尚未汇报，但时间充裕</div>`;
+    }
+    const expected = getExpectedProgress(task);
+    const expectedMarker = (hasStarted && !isDone) ? `<div class="expected-marker" style="left:${expected}%"></div>` : '';
     const startLabel = formatDateTime(task.startDate).split(' ')[0];
     const endLabel = formatDateTime(task.deadline);
+    let urgencyBadge = '';
+    if (hasStarted && !isDone) {
+      if (urgency > 80) urgencyBadge = `<span style="color:#ef4444;font-size:11px;margin-left:6px;">🔥 极度紧迫</span>`;
+      else if (urgency > 50) urgencyBadge = `<span style="color:#f59e0b;font-size:11px;margin-left:6px;">⚡ 较为紧迫</span>`;
+      else if (urgency > 20) urgencyBadge = `<span style="color:#fcd34d;font-size:11px;margin-left:6px;">⏳ 需要推进</span>`;
+    }
     return `
     <div class="task-card ${status.overdue ? 'overdue' : ''} ${isDone ? 'done' : ''}">
       <div class="task-header">
-        <div class="task-title">${escapeHtml(task.title)}</div>
+        <div class="task-title">${escapeHtml(task.title)}${urgencyBadge}</div>
         <div style="display:flex;gap:6px;align-items:center;">
-          <span class="task-badge ${status.class}">${status.text}</span>
+          <span class="task-badge ${!hasStarted ? 'badge-wait' : status.class}">${!hasStarted ? '未开始' : status.text}</span>
           <button class="delete-btn" onclick="deleteTask(${task.id})">×</button>
         </div>
       </div>
@@ -878,12 +930,13 @@ function renderTasks(container) {
         <span>🚀 ${startLabel} 开始</span>
         <span>📅 ${endLabel} 截止</span>
         <span>📊 ${task.progress}/100</span>
+        ${hasStarted && !isDone ? `<span>📈 应到 ${expected}%</span>` : ''}
       </div>
-      ${unreportedWarn}
+      ${warnHtml}
       <div class="progress-section">
         <div class="progress-label">
           <span>进度条（100格）</span>
-          <span>${task.progress}% ${!isDone ? `(应到 ${expected}%)` : ''}</span>
+          <span>${task.progress}% ${hasStarted && !isDone ? `(应到 ${expected}%)` : ''}</span>
         </div>
         <div class="progress-track">
           <div class="progress-grid"></div>
@@ -892,20 +945,20 @@ function renderTasks(container) {
         </div>
       </div>
       <div class="task-actions">
-        <button class="btn ${btnClass} btn-small" onclick="openReportModal(${task.id})" ${isDone ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''}>${btnText}</button>
+        <button class="btn ${btnClass} btn-small" onclick="openReportModal(${task.id})" ${(!hasStarted || isDone) ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''}>${btnText}</button>
         <button class="btn btn-ghost btn-small" onclick="openEditModal(${task.id})">✏️ 编辑</button>
         <button class="btn btn-ghost btn-small" onclick="openRecordsModal(${task.id})">📋 记录 (${task.reports.length})</button>
       </div>
     </div>`;
   }).join('') + '</div>';
-  // 更新 critical 类
   setTimeout(() => {
     const p = calculatePressure();
     document.querySelectorAll('.task-card').forEach((card, idx) => {
       const task = tasks[idx];
       if (!task) return;
+      const start = new Date(task.startDate);
       const hasToday = task.reports.some(r => r.date === getTodayStr());
-      if (p >= 100 && !hasToday && task.progress < 100) card.classList.add('critical');
+      if (p >= 100 && start <= new Date() && !hasToday && task.progress < 100) card.classList.add('critical');
       else card.classList.remove('critical');
     });
   }, 50);
@@ -998,29 +1051,22 @@ function drawProgressChart(days) {
   const pad = { top: 20, right: 20, bottom: 30, left: 40 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
-  
   ctx.clearRect(0, 0, w, h);
-  
-  // 收集数据
   const labels = [];
   const actualData = [];
   const expectedData = [];
   for (let i = days - 1; i >= 0; i--) {
     const dateStr = getDateStr(i);
-    labels.push(dateStr.slice(5)); // MM-DD
+    labels.push(dateStr.slice(5));
     let totalActual = 0, totalExpected = 0, count = 0;
     tasks.forEach(task => {
       const start = new Date(task.startDate);
       const end = new Date(task.deadline);
       const checkDate = new Date(dateStr + 'T23:59:59');
       if (checkDate >= start && checkDate <= end) {
-        // 计算该日期的实际进度（基于该日期前的汇报）
         let dayProgress = 0;
-        task.reports.forEach(r => {
-          if (r.date <= dateStr) dayProgress += r.progressAdded;
-        });
+        task.reports.forEach(r => { if (r.date <= dateStr) dayProgress += r.progressAdded; });
         totalActual += Math.min(100, dayProgress);
-        // 理论进度
         const totalSpan = end - start;
         const elapsed = checkDate - start;
         const exp = Math.min(100, Math.max(0, (elapsed / totalSpan) * 100));
@@ -1031,19 +1077,14 @@ function drawProgressChart(days) {
     actualData.push(count ? totalActual / count : 0);
     expectedData.push(count ? totalExpected / count : 0);
   }
-  
-  // 网格线
-  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
   for (let i = 0; i <= 5; i++) {
     const y = pad.top + chartH * (i / 5);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
     ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
     ctx.fillText(`${100 - i * 20}%`, pad.left - 6, y + 3);
   }
-  
-  // 绘制折线
-  function drawLine(data, color, fillColor) {
+  function drawLine(data, color) {
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
     const stepX = chartW / (days - 1 || 1);
     data.forEach((val, i) => {
@@ -1052,7 +1093,6 @@ function drawProgressChart(days) {
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
-    // 点
     ctx.fillStyle = color;
     data.forEach((val, i) => {
       const x = pad.left + i * stepX;
@@ -1062,8 +1102,6 @@ function drawProgressChart(days) {
   }
   drawLine(expectedData, '#f59e0b');
   drawLine(actualData, '#6366f1');
-  
-  // X轴标签
   ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
   const stepX = chartW / (days - 1 || 1);
   labels.forEach((label, i) => {
@@ -1084,9 +1122,7 @@ function drawActivityChart(days) {
   const pad = { top: 20, right: 20, bottom: 30, left: 40 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
-  
   ctx.clearRect(0, 0, w, h);
-  
   const labels = [];
   const reportCounts = [];
   const progressCounts = [];
@@ -1103,18 +1139,13 @@ function drawActivityChart(days) {
     progressCounts.push(progCount);
     maxVal = Math.max(maxVal, repCount, progCount / 5);
   }
-  
-  // 网格
   ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + chartH * (i / 4);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
   }
-  
   const barWidth = Math.max(4, (chartW / days) * 0.35);
   const stepX = chartW / days;
-  
-  // 柱状图：汇报数
   ctx.fillStyle = 'rgba(16, 185, 129, 0.7)';
   reportCounts.forEach((val, i) => {
     const x = pad.left + i * stepX + stepX * 0.1;
@@ -1122,8 +1153,6 @@ function drawActivityChart(days) {
     const y = pad.top + chartH - barH;
     ctx.fillRect(x, y, barWidth, barH);
   });
-  
-  // 柱状图：推进格数/5
   ctx.fillStyle = 'rgba(239, 68, 68, 0.7)';
   progressCounts.forEach((val, i) => {
     const x = pad.left + i * stepX + stepX * 0.55;
@@ -1131,8 +1160,6 @@ function drawActivityChart(days) {
     const y = pad.top + chartH - barH;
     ctx.fillRect(x, y, barWidth, barH);
   });
-  
-  // X轴标签
   ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
   labels.forEach((label, i) => {
     if (days > 14 && i % 3 !== 0 && i !== days - 1) return;
@@ -1163,7 +1190,6 @@ function handleFab() {
   else if (currentView === 'logs') generateAndShowSummary();
 }
 
-// ========== 添加任务 ==========
 function openAddModal() {
   document.getElementById('addModal').classList.add('active');
   const now = new Date();
@@ -1190,7 +1216,6 @@ function submitAddTask() {
   save(); render(); closeAddModal();
 }
 
-// ========== 编辑任务 ==========
 function openEditModal(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -1229,14 +1254,13 @@ function deleteTask(id) {
   save(); render();
 }
 
-// ========== 汇报 ==========
 function openReportModal(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task || task.progress >= 100) return;
   currentReportTaskId = taskId;
   document.getElementById('reportTaskTitle').textContent = '汇报：' + task.title;
-  document.getElementById('reportProgress').value = 10;
-  document.getElementById('rangeValue').textContent = '10';
+  document.getElementById('reportProgress').value = 5;
+  document.getElementById('rangeValue').textContent = '5';
   document.getElementById('reportText').value = '';
   document.getElementById('reportPhoto').value = '';
   document.getElementById('photoPreview').classList.remove('active');
@@ -1280,16 +1304,8 @@ async function submitReport() {
     photoBase64 = await compressImage(fileData);
   }
   const todayStr = getTodayStr();
-  const existingIdx = task.reports.findIndex(r => r.date === todayStr);
-  const reportData = { date: todayStr, text, photo: photoBase64, progressAdded, timestamp: new Date().toISOString() };
-  if (existingIdx >= 0) {
-    const oldAdded = task.reports[existingIdx].progressAdded;
-    task.progress = Math.min(100, task.progress - oldAdded + progressAdded);
-    task.reports[existingIdx] = reportData;
-  } else {
-    task.reports.push(reportData);
-    task.progress = Math.min(100, task.progress + progressAdded);
-  }
+  task.reports.push({ date: todayStr, text, photo: photoBase64, progressAdded, timestamp: new Date().toISOString() });
+  task.progress = Math.min(100, task.progress + progressAdded);
   const currentPressure = calculatePressure();
   save(); render(); closeReportModal();
   if (currentPressure >= 100 && progressAdded < 5 && task.progress < 100) {
@@ -1298,7 +1314,6 @@ async function submitReport() {
 }
 function closeWarningModal() { document.getElementById('warningModal').classList.remove('active'); }
 
-// ========== 记录 ==========
 function openRecordsModal(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -1319,74 +1334,101 @@ function openRecordsModal(taskId) {
 }
 function closeRecordsModal() { document.getElementById('recordsModal').classList.remove('active'); }
 
-// ========== 今日小结 ==========
 function generateDailySummary() {
   const today = getTodayStr();
   const todayDate = new Date(today + 'T00:00:00');
   let reportedCount = 0, totalProgress = 0, completedToday = 0, completedTotal = 0;
   let overdueCount = 0, unreportedCount = 0;
   const reportedTasks = [], completedTasks = [], overdueTasks = [], unreportedTasks = [];
-  
   tasks.forEach(task => {
-    const report = task.reports.find(r => r.date === today);
-    const wasCompletedYesterday = task.reports.some(r => r.date < today && (task.progress - (report ? report.progressAdded : 0)) >= 100);
+    const start = new Date(task.startDate);
+    const report = task.reports.filter(r => r.date === today);
+    const hasTodayReport = report.length > 0;
+    const todayProgress = report.reduce((s, r) => s + r.progressAdded, 0);
+    const wasCompletedYesterday = task.progress - todayProgress >= 100;
     const isCompleted = task.progress >= 100;
-    const isOverdue = new Date(task.deadline) < todayDate && !isCompleted;
-    
+    const isOverdue = new Date(task.deadline) < todayDate && !isCompleted && todayDate >= start;
     if (isCompleted) completedTotal++;
-    if (report) {
+    if (hasTodayReport) {
       reportedCount++;
-      totalProgress += report.progressAdded;
-      reportedTasks.push({ title: task.title, added: report.progressAdded });
+      totalProgress += todayProgress;
+      reportedTasks.push({ title: task.title, added: todayProgress });
       if (isCompleted && !wasCompletedYesterday) {
         completedToday++;
         completedTasks.push(task.title);
       }
-    } else if (!isCompleted) {
+    } else if (!isCompleted && todayDate >= start) {
       unreportedCount++;
       unreportedTasks.push(task.title);
     }
     if (isOverdue) { overdueCount++; overdueTasks.push(task.title); }
   });
-  
-  let content = `📅 ${today} 任务日报\n\n`;
-  content += `━━━━━━━━━━━━━━━━━━━━\n`;
-  content += `📊 今日数据概览\n`;
-  content += `━━━━━━━━━━━━━━━━━━━━\n`;
-  content += `✅ 今日汇报任务：${reportedCount} 项\n`;
-  content += `📈 累计推进进度：${totalProgress} 格\n`;
-  content += `🎉 今日完成任务：${completedToday} 项\n`;
-  content += `📋 累计完成总数：${completedTotal} / ${tasks.length} 项\n`;
-  content += `⏰ 当前逾期任务：${overdueCount} 项\n`;
-  content += `🔴 今日未汇报：${unreportedCount} 项\n\n`;
-  
+  let content = `📅 ${today} 任务日报
+
+`;
+  content += `━━━━━━━━━━━━━━━━━━━━
+`;
+  content += `📊 今日数据概览
+`;
+  content += `━━━━━━━━━━━━━━━━━━━━
+`;
+  content += `✅ 今日汇报任务：${reportedCount} 项
+`;
+  content += `📈 累计推进进度：${totalProgress} 格
+`;
+  content += `🎉 今日完成任务：${completedToday} 项
+`;
+  content += `📋 累计完成总数：${completedTotal} / ${tasks.length} 项
+`;
+  content += `⏰ 当前逾期任务：${overdueCount} 项
+`;
+  content += `🔴 今日未汇报：${unreportedCount} 项
+
+`;
   if (reportedTasks.length > 0) {
-    content += `━━━━━━━━━━━━━━━━━━━━\n`;
-    content += `📝 今日汇报详情\n`;
-    content += `━━━━━━━━━━━━━━━━━━━━\n`;
-    reportedTasks.forEach(t => { content += `• ${t.title}  +${t.added}格\n`; });
-    content += `\n`;
+    content += `━━━━━━━━━━━━━━━━━━━━
+`;
+    content += `📝 今日汇报详情
+`;
+    content += `━━━━━━━━━━━━━━━━━━━━
+`;
+    reportedTasks.forEach(t => { content += `• ${t.title}  +${t.added}格
+`; });
+    content += `
+`;
   }
   if (completedTasks.length > 0) {
-    content += `🎊 恭喜完成：${completedTasks.join('、')}\n\n`;
+    content += `🎊 恭喜完成：${completedTasks.join('、')}
+
+`;
   }
   if (overdueTasks.length > 0) {
-    content += `⚠️ 逾期警告：${overdueTasks.join('、')}\n\n`;
+    content += `⚠️ 逾期警告：${overdueTasks.join('、')}
+
+`;
   }
   if (unreportedTasks.length > 0) {
-    content += `🔴 尚未汇报：${unreportedTasks.slice(0,3).join('、')}${unreportedTasks.length > 3 ? ' 等' : ''}\n\n`;
+    content += `🔴 尚未汇报：${unreportedTasks.slice(0,3).join('、')}${unreportedTasks.length > 3 ? ' 等' : ''}
+
+`;
   }
-  
   const pressure = calculatePressure();
-  content += `━━━━━━━━━━━━━━━━━━━━\n`;
-  content += `💡 系统评语\n`;
-  content += `━━━━━━━━━━━━━━━━━━━━\n`;
-  if (pressure === 0) content += `状态完美！所有任务都在轨道上，继续保持！\n`;
-  else if (pressure < 30) content += `整体良好，但仍有 ${unreportedCount} 项任务未汇报，记得抽空处理。\n`;
-  else if (pressure < 60) content += `压力正在上升，建议优先处理逾期和未汇报任务。\n`;
-  else if (pressure < 90) content += `情况紧急！多项任务滞后，请立即集中精力追赶进度！\n`;
-  else content += `⚠️ 极度危险！系统压力爆表，你必须立刻行动，否则后果自负！\n`;
-  
+  content += `━━━━━━━━━━━━━━━━━━━━
+`;
+  content += `💡 系统评语
+`;
+  content += `━━━━━━━━━━━━━━━━━━━━
+`;
+  if (pressure === 0) content += `状态完美！所有任务都在轨道上，继续保持！
+`;
+  else if (pressure < 20) content += `整体良好，但仍有 ${unreportedCount} 项任务未汇报，记得抽空处理。
+`;
+  else if (pressure < 40) content += `压力正在上升，建议优先处理逾期和未汇报任务。
+`;
+  else if (pressure < 60) content += `情况紧急！多项任务滞后，请立即集中精力追赶进度！
+`;
+  else content += `⚠️ 极度危险！系统压力爆表，你必须立刻行动，否则后果自负！
+`;
   return { date: today, content, stats: { reportedCount, totalProgress, completedCount: completedToday, overdueCount } };
 }
 
@@ -1416,7 +1458,6 @@ function deleteLog(idx) {
   save(); render();
 }
 
-// 点击模态框内容阻止冒泡
 document.querySelectorAll('.modal-content').forEach(el => {
   el.addEventListener('click', e => e.stopPropagation());
 });
@@ -1425,9 +1466,4 @@ init();
 setInterval(() => updatePressure(), 60000);
 </script>
 </body>
-</html>'''
-
-with open('/mnt/agents/output/pressure_task_manager_pro.html', 'w', encoding='utf-8') as f:
-    f.write(html_code)
-
-print("文件已保存，大小:", len(html_code), "字符")
+</html>
