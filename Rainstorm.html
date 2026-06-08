@@ -747,6 +747,33 @@ function getTodayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+function autoLogTaskCompletion(task) {
+  const today = getTodayStr();
+  const content = `📅 ${today} 任务完成记录
+
+━━━━━━━━━━━━━━━━━━━━
+🎉 完成任务：${task.title}
+━━━━━━━━━━━━━━━━━━━━
+💡 系统评语
+━━━━━━━━━━━━━━━━━━━━
+任务已圆满完成！继续保持！
+`;
+  const idx = dailyLogs.findIndex(l => l.date === today);
+  if (idx >= 0) {
+    dailyLogs[idx].content += '
+
+' + content;
+    dailyLogs[idx].stats.completedCount = (dailyLogs[idx].stats.completedCount || 0) + 1;
+  } else {
+    dailyLogs.push({
+      date: today,
+      content,
+      stats: { reportedCount: 0, totalProgress: 100, completedCount: 1, overdueCount: 0 }
+    });
+  }
+  save();
+}
+
 function formatDateTime(iso) {
   const d = new Date(iso);
   return `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -802,36 +829,41 @@ function calculatePressure() {
   const now = new Date();
   const todayStr = getTodayStr();
   if (tasks.length === 0) return 0;
+
   tasks.forEach(task => {
     const start = new Date(task.startDate);
     const end = new Date(task.deadline);
-    if (now < start) return;
+    // 已完成的任务不显示也不计入压力
     if (task.progress >= 100) return;
-    const urgency = getUrgencyScore(task);
+    if (now < start) return;
+
     const hasTodayReport = task.reports.some(r => r.date === todayStr);
-    const hasAnyReport = task.reports.length > 0;
-    pressure += Math.min(40, urgency * 0.4);
-    if (!hasTodayReport) {
-      if (urgency > 50) pressure += 18;
-      else if (urgency > 20) pressure += 10;
-      else pressure += 4;
-    }
-    if (now > end) {
-      const daysOver = Math.floor((now - end) / (1000*60*60*24));
-      pressure += daysOver * 8;
-    }
+    const hoursLeft = (end - now) / (1000 * 60 * 60);
     const expected = getExpectedProgress(task);
-    if (task.progress < expected * 0.3) pressure += 12;
-    else if (task.progress < expected * 0.6) pressure += 6;
-    if (hasTodayReport && urgency > 60) {
-      const todayTotal = task.reports.filter(r => r.date === todayStr).reduce((s, r) => s + r.progressAdded, 0);
-      if (todayTotal < 5) pressure += 8;
+
+    // 今天未汇报（进行中任务）
+    if (!hasTodayReport) {
+      pressure += 12;
     }
-    if (!hasAnyReport) {
-      const daysSinceStart = Math.floor((now - start) / (1000*60*60*24));
-      if (daysSinceStart > 2) pressure += daysSinceStart * 3;
+
+    // 已逾期
+    if (now > end) {
+      pressure += 25;
     }
+    // 24小时内截止
+    else if (hoursLeft > 0 && hoursLeft <= 24) {
+      if (!hasTodayReport) pressure += 15;
+    }
+    // 3天内截止
+    else if (hoursLeft > 0 && hoursLeft <= 72) {
+      if (!hasTodayReport) pressure += 8;
+    }
+
+    // 进度严重滞后
+    if (task.progress < expected * 0.2) pressure += 10;
+    else if (task.progress < expected * 0.5) pressure += 5;
   });
+
   return Math.min(100, Math.floor(pressure));
 }
 
@@ -901,11 +933,16 @@ function render() {
 function renderTasks(container) {
   const todayStr = getTodayStr();
   const now = new Date();
-  if (tasks.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div>暂无任务，点击右下角添加</div></div>';
+  const activeTasks = tasks.filter(t => t.progress < 100);
+  if (activeTasks.length === 0) {
+    const completedCount = tasks.filter(t => t.progress >= 100).length;
+    const emptyMsg = completedCount > 0 
+      ? `<div class="empty-state"><div class="empty-state-icon">🎉</div><div>所有任务已完成！共 ${completedCount} 项</div><div style="font-size:13px;color:var(--text-dim);margin-top:8px;">完成记录已自动保存到日志</div></div>`
+      : '<div class="empty-state"><div class="empty-state-icon">📋</div><div>暂无任务，点击右下角添加</div></div>';
+    container.innerHTML = emptyMsg;
     return;
   }
-  container.innerHTML = '<div class="tasks-list">' + tasks.map(task => {
+  container.innerHTML = '<div class="tasks-list">' + activeTasks.map(task => {
     const start = new Date(task.startDate);
     const end = new Date(task.deadline);
     const status = getDeadlineStatus(task.deadline, task.progress);
@@ -974,7 +1011,7 @@ function renderTasks(container) {
     const p = calculatePressure();
     document.querySelectorAll('.task-card').forEach(card => {
       const taskId = parseInt(card.dataset.id);
-      const task = tasks.find(t => t.id === taskId);
+      const task = activeTasks.find(t => t.id === taskId);
       if (!task) return;
       const start = new Date(task.startDate);
       const hasToday = task.reports.some(r => r.date === getTodayStr());
@@ -1286,10 +1323,17 @@ function submitEditTask() {
   if (!title) { alert('请输入任务名称'); return; }
   if (!start || !deadline) { alert('请选择完整时间'); return; }
   if (new Date(start) >= new Date(deadline)) { alert('开始时间必须早于截止时间'); return; }
+  const prevProgress = task.progress;
   task.title = title;
   task.startDate = toLocalISOString(new Date(start));
   task.deadline = toLocalISOString(new Date(deadline));
   task.progress = Math.min(100, Math.max(0, progress));
+
+  // 任务首次完成，自动记录到日志
+  if (task.progress >= 100 && prevProgress < 100) {
+    autoLogTaskCompletion(task);
+  }
+
   save(); render(); closeEditModal();
 }
 
@@ -1349,8 +1393,15 @@ async function submitReport() {
     photoBase64 = await compressImage(fileData);
   }
   const todayStr = getTodayStr();
-  task.reports.push({ date: todayStr, text, photo: photoBase64, progressAdded, timestamp: new Date().toISOString() });
+  const prevProgress = task.progress;
+  task.reports.push({ date: todayStr, text, photo: photoBase64, progressAdded, timestamp: toLocalISOString(new Date()) });
   task.progress = Math.min(100, task.progress + progressAdded);
+
+  // 任务首次完成，自动记录到日志
+  if (task.progress >= 100 && prevProgress < 100) {
+    autoLogTaskCompletion(task);
+  }
+
   const currentPressure = calculatePressure();
   save(); render(); closeReportModal();
   if (currentPressure >= 100 && progressAdded < 5 && task.progress < 100) {
