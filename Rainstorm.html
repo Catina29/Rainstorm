@@ -608,7 +608,21 @@ body.extreme-pressure .gauge-status {
     <div class="form-group"><label class="form-label">任务名称</label><input type="text" class="form-input" id="editTitle" maxlength="100"></div>
     <div class="form-group"><label class="form-label">开始时间</label><input type="datetime-local" class="form-input" id="editStart"></div>
     <div class="form-group"><label class="form-label">截止时间</label><input type="datetime-local" class="form-input" id="editDeadline"></div>
-    <button class="btn btn-primary" style="width:100%;" onclick="submitEditTask()">保存修改</button>
+    <div class="form-group">
+      <label class="form-label">当前进度（格数）</label>
+      <div class="range-row">
+        <input type="range" id="editProgress" min="0" max="100" value="0" oninput="document.getElementById('editProgressValue').textContent = this.value">
+        <div class="range-value" id="editProgressValue">0</div>
+      </div>
+    </div>
+    <div class="form-group" id="editReportsPreview" style="display:none;">
+      <label class="form-label">汇报记录</label>
+      <div id="editReportsList" style="font-size:13px;color:var(--text-dim);max-height:120px;overflow-y:auto;"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn btn-danger" style="flex:1;animation:none;" onclick="deleteCurrentTask()">🗑️ 删除</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="submitEditTask()">保存修改</button>
+    </div>
   </div>
 </div>
 
@@ -668,6 +682,11 @@ body.extreme-pressure .gauge-status {
 </div>
 
 <script>
+function toLocalISOString(date) {
+  if (!date || isNaN(date.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 let tasks = [];
 let dailyLogs = [];
 let currentReportTaskId = null;
@@ -683,16 +702,16 @@ function getInitialTasks() {
   const mk = (m, d, h, min) => `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}`;
   const mkStart = (m, d) => `${y}-${pad(m)}-${pad(d)}T00:00`;
   return [
-    { id: Date.now()+1, title: "给妈妈发健身video", startDate: mkStart(6,6), deadline: mk(6,8,12,0), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+2, title: "拍面试视频", startDate: mkStart(6,6), deadline: mk(6,11,14,0), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+3, title: "错题本出成果", startDate: mkStart(6,6), deadline: mk(6,12,22,30), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+4, title: "补完文亮英语作业", startDate: mkStart(6,6), deadline: mk(6,13,22,30), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+5, title: "挑好父亲节礼物", startDate: mkStart(6,6), deadline: mk(6,14,20,0), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+6, title: "做好十页百科全书内容", startDate: mkStart(6,6), deadline: mk(6,17,23,59), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+7, title: "做好公司调研", startDate: mkStart(6,6), deadline: mk(6,17,23,59), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+8, title: "完成月考核", startDate: mkStart(6,6), deadline: mk(6,19,23,59), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+9, title: "考科目一", startDate: mkStart(6,6), deadline: mk(6,20,23,59), progress: 0, reports: [], createdAt: now.toISOString() },
-    { id: Date.now()+10, title: "构思三下乡项目", startDate: mkStart(6,6), deadline: mk(6,30,23,59), progress: 0, reports: [], createdAt: now.toISOString() }
+    { id: Date.now()+1, title: "给妈妈发健身video", startDate: mkStart(6,6), deadline: mk(6,8,12,0), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+2, title: "拍面试视频", startDate: mkStart(6,6), deadline: mk(6,11,14,0), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+3, title: "错题本出成果", startDate: mkStart(6,6), deadline: mk(6,12,22,30), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+4, title: "补完文亮英语作业", startDate: mkStart(6,6), deadline: mk(6,13,22,30), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+5, title: "挑好父亲节礼物", startDate: mkStart(6,6), deadline: mk(6,14,20,0), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+6, title: "做好十页百科全书内容", startDate: mkStart(6,6), deadline: mk(6,17,23,59), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+7, title: "做好公司调研", startDate: mkStart(6,6), deadline: mk(6,17,23,59), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+8, title: "完成月考核", startDate: mkStart(6,6), deadline: mk(6,19,23,59), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+9, title: "考科目一", startDate: mkStart(6,6), deadline: mk(6,20,23,59), progress: 0, reports: [], createdAt: toLocalISOString(now) },
+    { id: Date.now()+10, title: "构思三下乡项目", startDate: mkStart(6,6), deadline: mk(6,30,23,59), progress: 0, reports: [], createdAt: toLocalISOString(now) }
   ];
 }
 
@@ -918,7 +937,7 @@ function renderTasks(container) {
       else if (urgency > 20) urgencyBadge = `<span style="color:#fcd34d;font-size:11px;margin-left:6px;">⏳ 需要推进</span>`;
     }
     return `
-    <div class="task-card ${status.overdue ? 'overdue' : ''} ${isDone ? 'done' : ''}">
+    <div class="task-card ${status.overdue ? 'overdue' : ''} ${isDone ? 'done' : ''}" data-id="${task.id}">
       <div class="task-header">
         <div class="task-title">${escapeHtml(task.title)}${urgencyBadge}</div>
         <div style="display:flex;gap:6px;align-items:center;">
@@ -953,8 +972,9 @@ function renderTasks(container) {
   }).join('') + '</div>';
   setTimeout(() => {
     const p = calculatePressure();
-    document.querySelectorAll('.task-card').forEach((card, idx) => {
-      const task = tasks[idx];
+    document.querySelectorAll('.task-card').forEach(card => {
+      const taskId = parseInt(card.dataset.id);
+      const task = tasks.find(t => t.id === taskId);
       if (!task) return;
       const start = new Date(task.startDate);
       const hasToday = task.reports.some(r => r.date === getTodayStr());
@@ -1193,17 +1213,17 @@ function handleFab() {
 function openAddModal() {
   document.getElementById('addModal').classList.add('active');
   const now = new Date();
-  const pad = n => String(n).padStart(2,'0');
-  const localIso = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  document.getElementById('addStart').value = localIso;
-  now.setDate(now.getDate() + 3);
-  const localIso2 = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  document.getElementById('addDeadline').value = localIso2;
+  document.getElementById('addStart').value = toLocalISOString(now);
+  const deadline = new Date(now);
+  deadline.setDate(deadline.getDate() + 3);
+  document.getElementById('addDeadline').value = toLocalISOString(deadline);
   setTimeout(() => document.getElementById('addTitle').focus(), 100);
 }
 function closeAddModal() {
   document.getElementById('addModal').classList.remove('active');
   document.getElementById('addTitle').value = '';
+  document.getElementById('addStart').value = '';
+  document.getElementById('addDeadline').value = '';
 }
 function submitAddTask() {
   const title = document.getElementById('addTitle').value.trim();
@@ -1212,7 +1232,7 @@ function submitAddTask() {
   if (!title) { alert('请输入任务名称'); return; }
   if (!start || !deadline) { alert('请选择完整时间'); return; }
   if (new Date(start) >= new Date(deadline)) { alert('开始时间必须早于截止时间'); return; }
-  tasks.push({ id: Date.now(), title, startDate: new Date(start).toISOString(), deadline: new Date(deadline).toISOString(), progress: 0, reports: [], createdAt: new Date().toISOString() });
+  tasks.push({ id: Date.now(), title, startDate: toLocalISOString(new Date(start)), deadline: toLocalISOString(new Date(deadline)), progress: 0, reports: [], createdAt: toLocalISOString(new Date()) });
   save(); render(); closeAddModal();
 }
 
@@ -1221,30 +1241,55 @@ function openEditModal(taskId) {
   if (!task) return;
   currentEditTaskId = taskId;
   document.getElementById('editTitle').value = task.title;
-  const pad = n => String(n).padStart(2,'0');
-  const d1 = new Date(task.startDate);
-  const d2 = new Date(task.deadline);
-  document.getElementById('editStart').value = `${d1.getFullYear()}-${pad(d1.getMonth()+1)}-${pad(d1.getDate())}T${pad(d1.getHours())}:${pad(d1.getMinutes())}`;
-  document.getElementById('editDeadline').value = `${d2.getFullYear()}-${pad(d2.getMonth()+1)}-${pad(d2.getDate())}T${pad(d2.getHours())}:${pad(d2.getMinutes())}`;
+  document.getElementById('editStart').value = toLocalISOString(new Date(task.startDate));
+  document.getElementById('editDeadline').value = toLocalISOString(new Date(task.deadline));
+  document.getElementById('editProgress').value = task.progress;
+  document.getElementById('editProgressValue').textContent = task.progress;
+
+  const reportsPreview = document.getElementById('editReportsPreview');
+  const reportsList = document.getElementById('editReportsList');
+  if (task.reports && task.reports.length > 0) {
+    reportsPreview.style.display = 'block';
+    reportsList.innerHTML = task.reports.slice().reverse().map((r, i) => 
+      `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);${i===task.reports.length-1?'border-bottom:none;':''}">
+        <span style="color:var(--accent);font-weight:600;">${r.date}</span> 
+        <span style="color:var(--success);">+${r.progressAdded}格</span>
+        <div style="margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.text)}</div>
+      </div>`
+    ).join('');
+  } else {
+    reportsPreview.style.display = 'none';
+    reportsList.innerHTML = '';
+  }
+
   document.getElementById('editModal').classList.add('active');
 }
 function closeEditModal() {
   document.getElementById('editModal').classList.remove('active');
   currentEditTaskId = null;
+  document.getElementById('editTitle').value = '';
+  document.getElementById('editStart').value = '';
+  document.getElementById('editDeadline').value = '';
+  document.getElementById('editProgress').value = 0;
+  document.getElementById('editProgressValue').textContent = '0';
+  document.getElementById('editReportsPreview').style.display = 'none';
+  document.getElementById('editReportsList').innerHTML = '';
 }
 function submitEditTask() {
   if (!currentEditTaskId) return;
   const task = tasks.find(t => t.id === currentEditTaskId);
-  if (!task) return;
+  if (!task) { alert('任务不存在'); closeEditModal(); return; }
   const title = document.getElementById('editTitle').value.trim();
   const start = document.getElementById('editStart').value;
   const deadline = document.getElementById('editDeadline').value;
+  const progress = parseInt(document.getElementById('editProgress').value);
   if (!title) { alert('请输入任务名称'); return; }
   if (!start || !deadline) { alert('请选择完整时间'); return; }
   if (new Date(start) >= new Date(deadline)) { alert('开始时间必须早于截止时间'); return; }
   task.title = title;
-  task.startDate = new Date(start).toISOString();
-  task.deadline = new Date(deadline).toISOString();
+  task.startDate = toLocalISOString(new Date(start));
+  task.deadline = toLocalISOString(new Date(deadline));
+  task.progress = Math.min(100, Math.max(0, progress));
   save(); render(); closeEditModal();
 }
 
@@ -1460,6 +1505,17 @@ function deleteLog(idx) {
 
 document.querySelectorAll('.modal-content').forEach(el => {
   el.addEventListener('click', e => e.stopPropagation());
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeAddModal();
+    closeEditModal();
+    closeReportModal();
+    closeRecordsModal();
+    closeWarningModal();
+    closeSummaryModal();
+  }
 });
 
 init();
